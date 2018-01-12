@@ -10,9 +10,13 @@ import re
 import requests
 import sys
 import time
+import shutil
+import datetime
+import random
 from configparser import ConfigParser
 from io import StringIO
 from collections import defaultdict
+import botCredentials
 
 if sys.version_info <= (2, 6):
     import commands as subprocess
@@ -21,12 +25,19 @@ else:
 
 
 def load_config():
+    
+    
+    random.seed(datetime.datetime.now())
+    subs=["wallpapers", "imaginarylandscapes", "earthporn", "spaceporn"]
+    random.shuffle(subs)
+    
     default = defaultdict(str)
-    default["subreddit"] = "wallpapers"
+    default["subreddit"] = subs[0]
     default["nsfw"] = "False"
-    default["time"] = "day"
+    default["time"] = "hour"
     default["display"] = "0"
     default["output"] = "Pictures/Wallpapers"
+    
 
     config_path = os.path.expanduser("~/.config/change_wallpaper_reddit.rc")
     section_name = "root"
@@ -57,7 +68,7 @@ def load_config():
             add_to_ret(config.getint, "display")
             add_to_ret(config.get, "time")
             add_to_ret(config.get, "output")
-
+            
             return ret
 
     except IOError as e:
@@ -85,16 +96,29 @@ def parse_args():
     return args
 
 
-def get_top_image(sub_reddit):
+def get_top_image(sub_reddit, sub_name, home_dir, save_dir):
     """Get image link of most upvoted wallpaper of the day
     :sub_reddit: name of the sub reddit
     :return: the image link
     """
-    submissions = sub_reddit.get_new(limit=10) if args.time == "new" else sub_reddit.get_top(params={"t": args.time},
-                                                                                             limit=10)
+
+    if args.time == "new":
+        submissions = sub_reddit.get_new()#limit=10)
+    
+    else:
+        #sub_reddit.top(params={"t": args.time},limit=10)
+        submissions = sub_reddit.hot()#limit=10)
+        
     for submission in submissions:
         ret = {"id": submission.id}
-        if not args.nsfw and submission.over_18:
+
+        save_location = "{home_dir}/{save_dir}/{subreddit}-{id}.jpg".format(home_dir=home_dir, save_dir=save_dir,
+                                                                            subreddit=sub_name,
+                                                                            id=submission.id)
+        print save_location
+        print os.path.isfile(save_location)
+        if os.path.isfile(save_location) or not (args.nsfw or submission.over_18):
+            print "skipping" + str(submission.id)
             continue
         url = submission.url
         # Strip trailing arguments (after a '?')
@@ -154,19 +178,28 @@ def detect_desktop_environment():
     return environment
 
 
+
+def getDirSize(dir):  
+	size = 0L  
+	for root, dirs, files in os.walk(dir):  
+		size += sum([os.path.getsize(os.path.join(root, name)) for name in files])  
+	return size
+
 if __name__ == '__main__':
 
     args = parse_args()
     subreddit = args.subreddit
     save_dir = args.output
+    lts = "E:\media\pics\wallpapers"
+    home_dir = os.path.expanduser("~")
 
     supported_linux_desktop_envs = ["gnome", "mate", "kde", "lubuntu"]
 
     # Python Reddit Api Wrapper
-    r = praw.Reddit(user_agent="Get top wallpaper from /r/{subreddit} by /u/ssimunic".format(subreddit=subreddit))
+    r = praw.Reddit(client_id=botCredentials.clientID, client_secret=botCredentials.clientSecret, user_agent="Get top wallpaper from /r/{subreddit} by /u/ssimunic".format(subreddit=subreddit))
 
     # Get top image link
-    image = get_top_image(r.get_subreddit(subreddit))
+    image = get_top_image(r.subreddit(subreddit), home_dir=home_dir, save_dir=save_dir, sub_name=subreddit)
     if "url" not in image:
         sys.exit("Error: No suitable images were found, the program is now" \
                  " exiting.")
@@ -178,15 +211,40 @@ if __name__ == '__main__':
     if response.status_code == requests.codes.ok:
         # Get home directory and location where image will be saved
         # (default location for Ubuntu is used)
-        home_dir = os.path.expanduser("~")
+        
         save_location = "{home_dir}/{save_dir}/{subreddit}-{id}.jpg".format(home_dir=home_dir, save_dir=save_dir,
                                                                             subreddit=subreddit,
                                                                             id=image["id"])
+        import datetime
 
-        if os.path.isfile(save_location):
-            sys.exit("Info: Image already exists, nothing to do, the program is" \
-                  " now exiting")
+        now = datetime.datetime.now()
+        save_folder = "{home_dir}/{save_dir}/".format(home_dir=home_dir, save_dir=save_dir)
 
+        dir = os.path.dirname(save_location)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+            
+        print save_folder
+        size = getDirSize(save_folder)
+        print size
+        if size > 500000000:
+            print "moving folder to lts"
+            savename = lts+ "\\" + now.strftime("%Y-%m-%d_%H.%M.%f")
+            ltsdir = os.path.dirname(savename + "\\")
+            while os.path.exists(ltsdir):
+                savename = savename + "1"
+                ltsdir = os.path.dirname(savename + "\\")
+            
+            shutil.copytree(save_folder, savename)
+            shutil.rmtree(save_folder)
+
+        #if os.path.isfile(save_location):
+        #    print "Info: Image already exists, nothing to do, the program is" \
+        #          " now exiting"
+
+        #    sys.exit("Info: Image already exists, nothing to do, the program is" \
+        #          " now exiting")
+            
         # Create folders if they don't exist
         dir = os.path.dirname(save_location)
         if not os.path.exists(dir):
@@ -210,12 +268,16 @@ if __name__ == '__main__':
 
         # Windows
         if platform_name.startswith("Win"):
+            print "windows detected"
             # Python 3.x
             if sys.version_info >= (3, 0):
+                print "python 3.0"
                 ctypes.windll.user32.SystemParametersInfoW(20, 0, save_location, 3)
             # Python 2.x
             else:
-                ctypes.windll.user32.SystemParametersInfoA(20, 0, save_location, 3)
+                print "python 2.0"
+                ctypes.windll.user32.SystemParametersInfoW(20, 0, save_location, 3)
+                #ctypes.windll.user32.SystemParametersInfoA(20, 0, save_location, 3)
 
         # OS X/macOS
         if platform_name.startswith("Darwin"):
