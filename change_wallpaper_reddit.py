@@ -23,6 +23,8 @@ if sys.version_info <= (2, 6):
 else:
     import subprocess
 
+longtermstorageON = False
+
 
 def load_config():
     
@@ -115,10 +117,10 @@ def get_top_image(sub_reddit, sub_name, home_dir, save_dir):
         save_location = "{home_dir}/{save_dir}/{subreddit}-{id}.jpg".format(home_dir=home_dir, save_dir=save_dir,
                                                                             subreddit=sub_name,
                                                                             id=submission.id)
-        print save_location
-        print os.path.isfile(save_location)
+        print(save_location)
+        print(os.path.isfile(save_location))
         if os.path.isfile(save_location) or not (args.nsfw or submission.over_18):
-            print "skipping" + str(submission.id)
+            print("skipping" + str(submission.id))
             continue
         url = submission.url
         # Strip trailing arguments (after a '?')
@@ -167,6 +169,9 @@ def detect_desktop_environment():
     elif os.environ.get("DESKTOP_SESSION") == "mate":
         environment["name"] = "mate"
         environment["command"] = "gsettings set org.mate.background picture-filename {save_location}"
+    elif os.environ.get("DESKTOP_SESSION") == "i3":
+        environment["name"] = "i3"
+        environment["command"] = "feh --bg-fill {save_location}"
     else:
         try:
             info = subprocess.getoutput("xprop -root _DT_SAVE_MODE")
@@ -180,7 +185,7 @@ def detect_desktop_environment():
 
 
 def getDirSize(dir):  
-	size = 0L  
+	size = 0
 	for root, dirs, files in os.walk(dir):  
 		size += sum([os.path.getsize(os.path.join(root, name)) for name in files])  
 	return size
@@ -193,7 +198,7 @@ if __name__ == '__main__':
     lts = "E:\media\pics\wallpapers"
     home_dir = os.path.expanduser("~")
 
-    supported_linux_desktop_envs = ["gnome", "mate", "kde", "lubuntu"]
+    supported_linux_desktop_envs = ["gnome", "mate", "kde", "lubuntu", "i3"]
 
     # Python Reddit Api Wrapper
     r = praw.Reddit(client_id=botCredentials.clientID, client_secret=botCredentials.clientSecret, user_agent="Get top wallpaper from /r/{subreddit} by /u/ssimunic".format(subreddit=subreddit))
@@ -202,7 +207,7 @@ if __name__ == '__main__':
     image = get_top_image(r.subreddit(subreddit), home_dir=home_dir, save_dir=save_dir, sub_name=subreddit)
     if "url" not in image:
         sys.exit("Error: No suitable images were found, the program is now" \
-                 " exiting.")
+                " exiting.")
 
     # Request image
     response = requests.get(image["url"], allow_redirects=False)
@@ -224,18 +229,21 @@ if __name__ == '__main__':
         if not os.path.exists(dir):
             os.makedirs(dir)
             
-        print save_folder
+        print(save_folder)
         size = getDirSize(save_folder)
-        print size
+        print(size)
         if size > 500000000:
-            print "moving folder to lts"
-            savename = lts+ "\\" + now.strftime("%Y-%m-%d_%H.%M.%f")
-            ltsdir = os.path.dirname(savename + "\\")
-            while os.path.exists(ltsdir):
-                savename = savename + "1"
+            if longtermstorageON:
+                print ("moving folder to lts")
+                savename = lts+ "\\" + now.strftime("%Y-%m-%d_%H.%M.%f")
                 ltsdir = os.path.dirname(savename + "\\")
-            
-            shutil.copytree(save_folder, savename)
+                count = 0
+                while os.path.exists(ltsdir):
+                    savename = savename + str(count)
+                    ltsdir = os.path.dirname(savename + "\\")
+                    count += 1
+                
+                shutil.copytree(save_folder, savename)
             shutil.rmtree(save_folder)
 
         #if os.path.isfile(save_location):
@@ -268,14 +276,14 @@ if __name__ == '__main__':
 
         # Windows
         if platform_name.startswith("Win"):
-            print "windows detected"
+            print ("windows detected")
             # Python 3.x
             if sys.version_info >= (3, 0):
-                print "python 3.0"
+                print ("python 3.0")
                 ctypes.windll.user32.SystemParametersInfoW(20, 0, save_location, 3)
             # Python 2.x
             else:
-                print "python 2.0"
+                print ("python 2.0")
                 ctypes.windll.user32.SystemParametersInfoW(20, 0, save_location, 3)
                 #ctypes.windll.user32.SystemParametersInfoA(20, 0, save_location, 3)
 
