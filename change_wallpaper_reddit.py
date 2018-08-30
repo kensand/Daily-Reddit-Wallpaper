@@ -30,7 +30,11 @@ def load_config():
     
     
     random.seed(datetime.datetime.now())
+<<<<<<< HEAD
     subs=["earthporn"]#"wallpapers", "imaginarylandscapes", "earthporn", "spaceporn"]
+=======
+    subs=["earthporn"] #"wallpapers", "imaginarylandscapes", "earthporn", "spaceporn"]
+>>>>>>> 5bd924291baac3b6a11468a0a980a94f32d44ee7
     random.shuffle(subs)
     
     default = defaultdict(str)
