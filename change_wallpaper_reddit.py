@@ -263,6 +263,10 @@ if __name__ == '__main__':
             for chunk in response.iter_content(4096):
                 fo.write(chunk)
 
+        with open("current.jpg", "wb") as fo:
+            for chunk in response.iter_content(4096):
+                fo.write(chunk)
+               
         # Check OS and environments
         platform_name = platform.system()
         if platform_name.startswith("Lin"):
